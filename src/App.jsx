@@ -6,11 +6,12 @@ import {
 import {
   Sparkles, Droplets, Users, ClipboardList, TrendingUp, TrendingDown, AlertTriangle,
   CheckCircle2, Settings, Plus, Trash2, X, ChevronRight, Building2, CalendarDays,
-  ArrowRight, Activity, LayoutGrid, Lock, LockOpen, ShieldCheck, Link as LinkIcon, Download, Pencil
+  ArrowRight, Activity, LayoutGrid, Lock, LockOpen, ShieldCheck, Link as LinkIcon, Download, Pencil, QrCode
 } from 'lucide-react';
 import { subscribe, writeData } from './lib/storage';
 import { sha256Hex, isValidHash } from './lib/hash';
 import { exportMonthlyReport } from './lib/export';
+import QRCode from 'qrcode';
 import logoStar from './logo-star.png';
 import smzLogo from './smz-logo.png';
 
@@ -1432,6 +1433,41 @@ function ManageTab({ supervisors, responses, onAdd, onRemove, onUpdate }) {
     }
   };
 
+  const [qrOpenId, setQrOpenId] = useState(null);
+  const [qrUrls, setQrUrls] = useState({});
+
+  const toggleQr = async (s) => {
+    if (qrOpenId === s.id) { setQrOpenId(null); return; }
+    setQrOpenId(s.id);
+    if (!qrUrls[s.id]) {
+      const url = `${window.location.origin}${window.location.pathname}?s=${s.id}`;
+      try {
+        const dataUrl = await QRCode.toDataURL(url, {
+          width: 500,
+          margin: 1,
+          color: { dark: '#122A3D', light: '#FFFFFF' },
+        });
+        setQrUrls(prev => ({ ...prev, [s.id]: dataUrl }));
+      } catch (e) {
+        console.error('QR generation failed', e);
+      }
+    }
+  };
+
+  const copyQrImage = async (s) => {
+    const dataUrl = qrUrls[s.id];
+    if (!dataUrl) return;
+    try {
+      const blob = await (await fetch(dataUrl)).blob();
+      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+      setCopiedId(s.id);
+      setCopiedType('qr');
+      setTimeout(() => { setCopiedId(null); setCopiedType(null); }, 1800);
+    } catch {
+      // Some browsers don't support copying images — the download button still works.
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <div className="rounded-2xl p-4" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
@@ -1508,6 +1544,51 @@ function ManageTab({ supervisors, responses, onAdd, onRemove, onUpdate }) {
                         <><Activity size={13} /> نسخ رابط "نسبتي" (له وحده)</>
                       )}
                     </button>
+
+                    <button
+                      onClick={() => toggleQr(s)}
+                      className="flex items-center justify-center gap-1.5 text-xs font-semibold px-2 py-1.5 rounded-lg"
+                      style={{ background: qrOpenId === s.id ? C.primarySoft : C.bg, color: qrOpenId === s.id ? C.primary : C.ink }}
+                    >
+                      <QrCode size={13} /> {qrOpenId === s.id ? 'إخفاء رمز QR' : 'عرض / تنزيل رمز QR'}
+                    </button>
+
+                    {qrOpenId === s.id && (
+                      <div className="flex flex-col items-center gap-2 pt-3" style={{ borderTop: `1px solid ${C.border}` }}>
+                        {qrUrls[s.id] ? (
+                          <>
+                            <img
+                              src={qrUrls[s.id]}
+                              alt={`QR - ${s.name}`}
+                              style={{ width: 160, height: 160, borderRadius: 10, border: `1px solid ${C.border}` }}
+                            />
+                            <div className="flex gap-2 w-full">
+                              <a
+                                href={qrUrls[s.id]}
+                                download={`qr-${s.name}.png`}
+                                className="flex-1 text-center rounded-lg py-2 text-xs font-semibold"
+                                style={{ background: C.primary, color: '#fff' }}
+                              >
+                                تنزيل الصورة
+                              </a>
+                              <button
+                                onClick={() => copyQrImage(s)}
+                                className="flex-1 rounded-lg py-2 text-xs font-semibold"
+                                style={{
+                                  background: copiedId === s.id && copiedType === 'qr' ? C.primarySoft : C.surface,
+                                  color: copiedId === s.id && copiedType === 'qr' ? C.primary : C.ink,
+                                  border: `1px solid ${C.border}`,
+                                }}
+                              >
+                                {copiedId === s.id && copiedType === 'qr' ? 'تم النسخ' : 'نسخ الصورة'}
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <p style={{ fontSize: 11.5, color: C.inkMuted }}>...جارِ التوليد</p>
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
               </div>
