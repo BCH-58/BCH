@@ -49,7 +49,18 @@ const SCALE = [
   { value: 1, label: 'سيء', color: C.red },
 ];
 
-// Shown only when a criterion is rated "مقبول" or "سيء" — turns a bare
+// Custom weight per rating, out of 100 for a single rating (not evenly
+// spaced) — a criterion's or supervisor's overall score is the average of
+// these weights across every rating counted.
+const RATING_WEIGHT = { 4: 100, 3: 85, 2: 50, 1: 15 };
+
+function pctFromValues(vals) {
+  if (!vals.length) return 0;
+  const sum = vals.reduce((a, b) => a + RATING_WEIGHT[b], 0);
+  return sum / vals.length;
+}
+
+// Shown only when a criterion is rated "مقبول" أو "سيء" — turns a bare
 // low score into an actionable reason. "سبب آخر" opens a free-text field.
 const OTHER_REASON = 'سبب آخر';
 const REASONS = {
@@ -307,9 +318,7 @@ export default function App() {
     return out;
   }, [monthResponses]);
 
-  const overallPct = allRatingsFlat.length
-    ? ((allRatingsFlat.reduce((a, b) => a + b, 0) / allRatingsFlat.length - 1) / 3) * 100
-    : 0;
+  const overallPct = pctFromValues(allRatingsFlat);
 
   const positivePct = allRatingsFlat.length
     ? (allRatingsFlat.filter(v => v >= 3).length / allRatingsFlat.length) * 100
@@ -318,7 +327,7 @@ export default function App() {
   const criteriaAverages = useMemo(() => {
     return CRITERIA.map(c => {
       const vals = monthResponses.map(r => r.ratings[c.id]);
-      const pct = vals.length ? ((vals.reduce((a, b) => a + b, 0) / vals.length - 1) / 3) * 100 : 0;
+      const pct = pctFromValues(vals);
       return { ...c, pct: Math.round(pct) };
     });
   }, [monthResponses]);
@@ -328,7 +337,7 @@ export default function App() {
       const rs = monthResponses.filter(r => r.supervisorId === s.id);
       const vals = [];
       rs.forEach(r => CRITERIA.forEach(c => vals.push(r.ratings[c.id])));
-      const pct = vals.length ? ((vals.reduce((a, b) => a + b, 0) / vals.length - 1) / 3) * 100 : null;
+      const pct = vals.length ? pctFromValues(vals) : null;
       return { ...s, count: rs.length, pct };
     }).sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1));
   }, [supervisors, monthResponses]);
@@ -337,7 +346,7 @@ export default function App() {
     const byDate = {};
     monthResponses.forEach(r => {
       const vals = CRITERIA.map(c => r.ratings[c.id]);
-      const avgPct = ((vals.reduce((a, b) => a + b, 0) / vals.length - 1) / 3) * 100;
+      const avgPct = pctFromValues(vals);
       if (!byDate[r.date]) byDate[r.date] = [];
       byDate[r.date].push(avgPct);
     });
@@ -546,7 +555,7 @@ function MyScoreView({ supId, supervisors, responses, logoStar }) {
 
   const criteriaAverages = CRITERIA.map(c => {
     const vals = rs.map(r => r.ratings[c.id]);
-    const pct = vals.length ? ((vals.reduce((a, b) => a + b, 0) / vals.length - 1) / 3) * 100 : 0;
+    const pct = pctFromValues(vals);
     return { ...c, pct: Math.round(pct) };
   });
   const overall = rs.length
@@ -878,7 +887,7 @@ function SupervisorDetail({ supId, supervisors, responses, onBack, onClearRespon
 
   const criteriaAverages = CRITERIA.map(c => {
     const vals = rs.map(r => r.ratings[c.id]);
-    const pct = vals.length ? ((vals.reduce((a, b) => a + b, 0) / vals.length - 1) / 3) * 100 : 0;
+    const pct = pctFromValues(vals);
     return { ...c, pct: Math.round(pct) };
   });
   const overall = rs.length
@@ -976,7 +985,7 @@ function SupervisorDetail({ supId, supervisors, responses, onBack, onClearRespon
         <div className="flex flex-col gap-2">
           {rs.map(r => {
             const vals = CRITERIA.map(c => r.ratings[c.id]);
-            const pct = ((vals.reduce((a, b) => a + b, 0) / vals.length - 1) / 3) * 100;
+            const pct = pctFromValues(vals);
             const isOpen = expandedId === r.id;
             return (
               <div key={r.id} className="rounded-xl overflow-hidden" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
