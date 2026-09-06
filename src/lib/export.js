@@ -8,9 +8,15 @@ const AMBER = 'FFDE9A34';
 const RED = 'FFC64B4B';
 const WHITE = 'FFFFFFFF';
 
+// Custom weight per rating, out of 100 for a single rating (not evenly
+// spaced) — must stay identical to RATING_WEIGHT in src/App.jsx so the
+// exported percentages always match what the dashboard shows.
+const RATING_WEIGHT = { 4: 100, 3: 85, 2: 50, 1: 15 };
+
 function scoreOf(r, criteria) {
   const vals = criteria.map((c) => r.ratings[c.id]);
-  return Math.round(((vals.reduce((a, b) => a + b, 0) / vals.length - 1) / 3) * 100);
+  const sum = vals.reduce((a, b) => a + RATING_WEIGHT[b], 0);
+  return Math.round(sum / vals.length);
 }
 
 function colorForPct(pct) {
@@ -105,14 +111,15 @@ export async function exportMonthlyReport({ responses, supervisors, criteria, sc
       if (!rs.length) return { name: s.name, department: s.department, count: 0, pct: null };
       const vals = [];
       rs.forEach((r) => criteria.forEach((c) => vals.push(r.ratings[c.id])));
-      const pct = Math.round(((vals.reduce((a, b) => a + b, 0) / vals.length - 1) / 3) * 100);
+      const sum = vals.reduce((a, b) => a + RATING_WEIGHT[b], 0);
+      const pct = Math.round(sum / vals.length);
       return { name: s.name, department: s.department, count: rs.length, pct };
     })
     .sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1));
 
   const critStats = criteria.map((c) => {
     const vals = monthResponses.map((r) => r.ratings[c.id]);
-    const pct = vals.length ? Math.round(((vals.reduce((a, b) => a + b, 0) / vals.length - 1) / 3) * 100) : null;
+    const pct = vals.length ? Math.round(vals.reduce((a, b) => a + RATING_WEIGHT[b], 0) / vals.length) : null;
     return { label: c.label, pct };
   });
 
