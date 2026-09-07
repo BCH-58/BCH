@@ -881,7 +881,10 @@ function SupervisorsTab({ supervisorStats, onSelect, goManage }) {
 
 function SupervisorDetail({ supId, supervisors, responses, onBack, onClearResponses }) {
   const sup = supervisors.find(s => s.id === supId);
-  const rs = responses.filter(r => r.supervisorId === supId).sort((a, b) => b.date.localeCompare(a.date));
+  // Newest first: reverse (submissions are appended in order, so this puts
+  // the latest-submitted one first), then a stable sort by date descending
+  // keeps that "latest first" order for entries sharing the same day too.
+  const rs = [...responses].filter(r => r.supervisorId === supId).reverse().sort((a, b) => b.date.localeCompare(a.date));
   const [expandedId, setExpandedId] = useState(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
 
