@@ -11,7 +11,7 @@ const WHITE = 'FFFFFFFF';
 // Custom weight per rating, out of 100 for a single rating (not evenly
 // spaced) — must stay identical to RATING_WEIGHT in src/App.jsx so the
 // exported percentages always match what the dashboard shows.
-const RATING_WEIGHT = { 4: 100, 3: 85, 2: 50, 1: 15 };
+const RATING_WEIGHT = { 4: 100, 3: 85, 2: 45, 1: 0 };
 
 function scoreOf(r, criteria) {
   const vals = criteria.map((c) => r.ratings[c.id]);
