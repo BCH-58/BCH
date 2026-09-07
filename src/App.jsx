@@ -52,7 +52,7 @@ const SCALE = [
 // Custom weight per rating, out of 100 for a single rating (not evenly
 // spaced) — a criterion's or supervisor's overall score is the average of
 // these weights across every rating counted.
-const RATING_WEIGHT = { 4: 100, 3: 85, 2: 50, 1: 15 };
+const RATING_WEIGHT = { 4: 100, 3: 85, 2: 45, 1: 0 };
 
 function pctFromValues(vals) {
   if (!vals.length) return 0;
