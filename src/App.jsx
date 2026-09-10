@@ -50,7 +50,6 @@ const YARD_CRITERIA = [
   { id: 'waste', label: 'نظافة حاويات النفايات ومناطق التجميع', short: 'حاويات النفايات', icon: ClipboardList },
   { id: 'green', label: 'نظافة المسطحات الخضراء والحدائق', short: 'المسطحات الخضراء', icon: Sparkles },
   { id: 'litter', label: 'خلو الساحة من المخلفات المتناثرة', short: 'خلو الساحة من المخلفات', icon: Droplets },
-  { id: 'response', label: 'سرعة استجابة عامل النظافة عند الطلب', short: 'سرعة الاستجابة', icon: Activity },
 ];
 
 function criteriaFor(type) {
@@ -91,7 +90,6 @@ const YARD_REASONS = {
   waste: ['الحاوية ممتلئة', 'رائحة كريهة', 'الحاوية تالفة أو مكسورة', OTHER_REASON],
   green: ['أعشاب غير مشذبة', 'مخلفات نباتية متراكمة', 'ري غير منتظم', OTHER_REASON],
   litter: ['أوراق أو مخلفات متناثرة', 'أعقاب سجائر', 'مخلفات بناء أو صيانة', OTHER_REASON],
-  response: ['تأخر في الاستجابة', 'لم يتم الرد على الطلب', 'سلوك غير مناسب', OTHER_REASON],
 };
 
 function reasonsFor(type) {
