@@ -42,6 +42,21 @@ const CRITERIA = [
   { id: 'response', label: 'استجابة العامل/ة عند الطلب', short: 'سرعة الاستجابة', icon: Activity },
 ];
 
+// Second survey template — for supervisors responsible for outdoor
+// courtyards/grounds instead of patient rooms. A fully separate criteria
+// set (own ids) so it never mixes with the room criteria above.
+const YARD_CRITERIA = [
+  { id: 'walkways', label: 'نظافة الأرضيات والممرات الخارجية', short: 'الممرات الخارجية', icon: LayoutGrid },
+  { id: 'waste', label: 'نظافة حاويات النفايات ومناطق التجميع', short: 'حاويات النفايات', icon: ClipboardList },
+  { id: 'green', label: 'نظافة المسطحات الخضراء والحدائق', short: 'المسطحات الخضراء', icon: Sparkles },
+  { id: 'litter', label: 'خلو الساحة من المخلفات المتناثرة', short: 'خلو الساحة من المخلفات', icon: Droplets },
+  { id: 'response', label: 'سرعة استجابة عامل النظافة عند الطلب', short: 'سرعة الاستجابة', icon: Activity },
+];
+
+function criteriaFor(type) {
+  return type === 'yards' ? YARD_CRITERIA : CRITERIA;
+}
+
 const SCALE = [
   { value: 4, label: 'ممتاز', color: C.primary },
   { value: 3, label: 'جيد جدا', color: '#4E9C8F' },
@@ -70,6 +85,18 @@ const REASONS = {
   supplies: ['لا يوجد صابون', 'لا يوجد مناديل', 'حاويات المهملات ممتلئة', OTHER_REASON],
   response: ['تأخر في الاستجابة', 'لم يتم الرد على الطلب', 'سلوك غير مناسب', OTHER_REASON],
 };
+
+const YARD_REASONS = {
+  walkways: ['بقع أو اتساخ ظاهر', 'غبار متراكم', 'أثر انسكاب لم يُنظّف', OTHER_REASON],
+  waste: ['الحاوية ممتلئة', 'رائحة كريهة', 'الحاوية تالفة أو مكسورة', OTHER_REASON],
+  green: ['أعشاب غير مشذبة', 'مخلفات نباتية متراكمة', 'ري غير منتظم', OTHER_REASON],
+  litter: ['أوراق أو مخلفات متناثرة', 'أعقاب سجائر', 'مخلفات بناء أو صيانة', OTHER_REASON],
+  response: ['تأخر في الاستجابة', 'لم يتم الرد على الطلب', 'سلوك غير مناسب', OTHER_REASON],
+};
+
+function reasonsFor(type) {
+  return type === 'yards' ? YARD_REASONS : REASONS;
+}
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -314,7 +341,7 @@ export default function App() {
 
   const allRatingsFlat = useMemo(() => {
     const out = [];
-    monthResponses.forEach(r => CRITERIA.forEach(c => out.push(r.ratings[c.id])));
+    monthResponses.forEach(r => out.push(...Object.values(r.ratings)));
     return out;
   }, [monthResponses]);
 
@@ -324,9 +351,14 @@ export default function App() {
     ? (allRatingsFlat.filter(v => v >= 3).length / allRatingsFlat.length) * 100
     : 0;
 
+  // The "per criterion" breakdown chart only makes sense for one survey
+  // template at a time — it shows the room criteria (the default/primary
+  // survey). Yard-type responses still count fully toward every other
+  // number on this page (overall score, supervisor ranking, trend).
   const criteriaAverages = useMemo(() => {
+    const roomResponses = monthResponses.filter(r => (r.surveyType || 'rooms') === 'rooms');
     return CRITERIA.map(c => {
-      const vals = monthResponses.map(r => r.ratings[c.id]);
+      const vals = roomResponses.map(r => r.ratings[c.id]).filter(v => v !== undefined);
       const pct = pctFromValues(vals);
       return { ...c, pct: Math.round(pct) };
     });
@@ -336,7 +368,7 @@ export default function App() {
     return supervisors.map(s => {
       const rs = monthResponses.filter(r => r.supervisorId === s.id);
       const vals = [];
-      rs.forEach(r => CRITERIA.forEach(c => vals.push(r.ratings[c.id])));
+      rs.forEach(r => vals.push(...Object.values(r.ratings)));
       const pct = vals.length ? pctFromValues(vals) : null;
       return { ...s, count: rs.length, pct };
     }).sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1));
@@ -345,7 +377,7 @@ export default function App() {
   const trendData = useMemo(() => {
     const byDate = {};
     monthResponses.forEach(r => {
-      const vals = CRITERIA.map(c => r.ratings[c.id]);
+      const vals = Object.values(r.ratings);
       const avgPct = pctFromValues(vals);
       if (!byDate[r.date]) byDate[r.date] = [];
       byDate[r.date].push(avgPct);
@@ -552,9 +584,10 @@ export default function App() {
 function MyScoreView({ supId, supervisors, responses, logoStar }) {
   const sup = supervisors.find(s => s.id === supId);
   const rs = responses.filter(r => r.supervisorId === supId);
+  const criteria = criteriaFor(sup && sup.type);
 
-  const criteriaAverages = CRITERIA.map(c => {
-    const vals = rs.map(r => r.ratings[c.id]);
+  const criteriaAverages = criteria.map(c => {
+    const vals = rs.map(r => r.ratings[c.id]).filter(v => v !== undefined);
     const pct = pctFromValues(vals);
     return { ...c, pct: Math.round(pct) };
   });
@@ -757,7 +790,7 @@ function MonthlyExportCard({ responses, supervisors }) {
     if (count === 0 || isExporting) return;
     setIsExporting(true);
     try {
-      await exportMonthlyReport({ responses, supervisors, criteria: CRITERIA, scale: SCALE, month });
+      await exportMonthlyReport({ responses, supervisors, criteria: CRITERIA, yardCriteria: YARD_CRITERIA, scale: SCALE, month });
       setJustExported(true);
       setTimeout(() => setJustExported(false), 2000);
     } finally {
@@ -888,8 +921,9 @@ function SupervisorDetail({ supId, supervisors, responses, onBack, onClearRespon
   const [expandedId, setExpandedId] = useState(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
 
-  const criteriaAverages = CRITERIA.map(c => {
-    const vals = rs.map(r => r.ratings[c.id]);
+  const criteria = criteriaFor(sup && sup.type);
+  const criteriaAverages = criteria.map(c => {
+    const vals = rs.map(r => r.ratings[c.id]).filter(v => v !== undefined);
     const pct = pctFromValues(vals);
     return { ...c, pct: Math.round(pct) };
   });
@@ -987,9 +1021,10 @@ function SupervisorDetail({ supId, supervisors, responses, onBack, onClearRespon
         <h2 style={{ fontFamily: 'Cairo', fontWeight: 700, fontSize: 14, marginBottom: 8 }}>سجل استبيانات هذا الشهر — اضغط أي غرفة لعرض التفاصيل</h2>
         <div className="flex flex-col gap-2">
           {rs.map(r => {
-            const vals = CRITERIA.map(c => r.ratings[c.id]);
+            const vals = criteria.map(c => r.ratings[c.id]).filter(v => v !== undefined);
             const pct = pctFromValues(vals);
             const isOpen = expandedId === r.id;
+            const rIsYard = r.surveyType === 'yards';
             return (
               <div key={r.id} className="rounded-xl overflow-hidden" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
                 <button
@@ -999,7 +1034,7 @@ function SupervisorDetail({ supId, supervisors, responses, onBack, onClearRespon
                   <CalendarDays size={14} color={C.inkMuted} />
                   <div className="flex-1 min-w-0">
                     <p style={{ fontSize: 12.5 }} className="truncate">
-                      {r.date} {r.room && `· غرفة ${r.room}`} {r.patientName && `· ${r.patientName}`}
+                      {r.date} {r.room && `· ${rIsYard ? r.room : `غرفة ${r.room}`}`} {r.patientName && `· ${r.patientName}`}
                     </p>
                     {r.comment && <p style={{ fontSize: 11, color: C.inkMuted }} className="truncate">{r.comment}</p>}
                   </div>
@@ -1009,7 +1044,7 @@ function SupervisorDetail({ supId, supervisors, responses, onBack, onClearRespon
 
                 {isOpen && (
                   <div className="px-3 pb-3 flex flex-col gap-1.5" style={{ borderTop: `1px solid ${C.border}` }}>
-                    {CRITERIA.map(c => {
+                    {criteriaFor(r.surveyType).map(c => {
                       const v = r.ratings[c.id];
                       const scaleItem = SCALE.find(s => s.value === v);
                       const reason = r.reasons && r.reasons[c.id];
@@ -1214,6 +1249,14 @@ function RoundSession({ supervisor, responses, onSubmit, onSwitch, goOverview })
   const [clientIp, setClientIp] = useState(null);
   const [device] = useState(getDeviceLabel);
 
+  const isYard = supervisor.type === 'yards';
+  const criteria = criteriaFor(supervisor.type);
+  const reasonsMap = reasonsFor(supervisor.type);
+  const roomLabel = isYard ? 'الموقع' : 'رقم الغرفة';
+  const roomPlaceholder = isYard ? 'مثال: ساحة المدخل الرئيسي' : 'مثال: 214';
+  const nameLabel = isYard ? 'الاسم' : 'اسم المريض';
+  const namePlaceholder = isYard ? 'اسمك' : 'اسم المريض';
+
   // Look up the public IP once per session (best-effort — stays null if it fails).
   useEffect(() => {
     let cancelled = false;
@@ -1229,14 +1272,14 @@ function RoundSession({ supervisor, responses, onSubmit, onSwitch, goOverview })
     : 0;
   const roomAtLimit = roomCountToday >= ROOM_DAILY_LIMIT;
 
-  const complete = CRITERIA.every(c => ratings[c.id]) && room.trim().length > 0 && patientName.trim().length > 0;
+  const complete = criteria.every(c => ratings[c.id]) && room.trim().length > 0 && patientName.trim().length > 0;
   const canSubmit = complete && !roomAtLimit;
 
   const submit = () => {
     if (!canSubmit) return;
 
     const reasons = {};
-    CRITERIA.forEach(c => {
+    criteria.forEach(c => {
       const val = ratings[c.id];
       if (val === 1 || val === 2) {
         const choice = reasonChoice[c.id];
@@ -1249,7 +1292,7 @@ function RoundSession({ supervisor, responses, onSubmit, onSwitch, goOverview })
 
     onSubmit({
       id: uid(), supervisorId: supervisor.id, date, room: room.trim(), patientName: patientName.trim(),
-      ratings, reasons, comment, device, ip: clientIp,
+      surveyType: supervisor.type || 'rooms', ratings, reasons, comment, device, ip: clientIp,
     });
 
     // Clear the whole form after saving — nothing carries over to the next entry.
@@ -1288,42 +1331,42 @@ function RoundSession({ supervisor, responses, onSubmit, onSwitch, goOverview })
       {flash && (
         <div className="rounded-xl px-3 py-2 flex items-center gap-2" style={{ background: C.primarySoft }}>
           <CheckCircle2 size={15} color={C.primary} />
-          <span style={{ fontSize: 12.5, color: C.primary, fontWeight: 600 }}>تم الحفظ — جاهز للغرفة التالية</span>
+          <span style={{ fontSize: 12.5, color: C.primary, fontWeight: 600 }}>تم الحفظ — جاهز {isYard ? 'للموقع التالي' : 'للغرفة التالية'}</span>
         </div>
       )}
 
       <div className="rounded-2xl p-4 flex flex-col gap-3" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
         <div>
-          <label style={{ fontSize: 12, color: C.inkMuted, fontWeight: 600 }}>اسم المريض <span style={{ color: C.red }}>*</span></label>
+          <label style={{ fontSize: 12, color: C.inkMuted, fontWeight: 600 }}>{nameLabel} <span style={{ color: C.red }}>*</span></label>
           <input
-            type="text" value={patientName} onChange={e => setPatientName(e.target.value)} placeholder="اسم المريض"
+            type="text" value={patientName} onChange={e => setPatientName(e.target.value)} placeholder={namePlaceholder}
             className="w-full mt-1.5 rounded-xl px-3 py-2.5 text-sm"
             style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.ink }}
           />
         </div>
         <div>
-          <label style={{ fontSize: 12, color: C.inkMuted, fontWeight: 600 }}>رقم الغرفة <span style={{ color: C.red }}>*</span></label>
+          <label style={{ fontSize: 12, color: C.inkMuted, fontWeight: 600 }}>{roomLabel} <span style={{ color: C.red }}>*</span></label>
           <input
             type="text"
             value={room}
             onChange={e => setRoom(e.target.value)}
-            placeholder="مثال: 214"
+            placeholder={roomPlaceholder}
             className="w-full mt-1.5 rounded-xl px-3 py-2.5 text-sm"
             style={{ background: C.bg, border: `1px solid ${roomAtLimit ? C.red : roomCountToday > 0 ? C.amber : C.border}`, color: C.ink }}
           />
           {roomAtLimit ? (
             <p style={{ fontSize: 11.5, color: C.red, marginTop: 5, fontWeight: 600 }}>
-              ⚠ هذي الغرفة وصلت الحد الأقصى ({ROOM_DAILY_LIMIT} مرات) اليوم — غيّر رقم الغرفة عشان تقدر تحفظ
+              ⚠ هذا {isYard ? 'الموقع وصل' : 'الغرفة وصلت'} الحد الأقصى ({ROOM_DAILY_LIMIT} مرات) اليوم — غيّر {isYard ? 'الموقع' : 'رقم الغرفة'} عشان تقدر تحفظ
             </p>
           ) : roomCountToday > 0 ? (
             <p style={{ fontSize: 11.5, color: C.amber, marginTop: 5, fontWeight: 600 }}>
-              هذي الغرفة مسجّلة {roomCountToday} {roomCountToday === 1 ? 'مرة' : 'مرات'} اليوم — متبقّي {ROOM_DAILY_LIMIT - roomCountToday}
+              هذا {isYard ? 'الموقع مسجّل' : 'الغرفة مسجّلة'} {roomCountToday} {roomCountToday === 1 ? 'مرة' : 'مرات'} اليوم — متبقّي {ROOM_DAILY_LIMIT - roomCountToday}
             </p>
           ) : null}
         </div>
       </div>
 
-      {CRITERIA.map((c, i) => {
+      {criteria.map((c, i) => {
         const val = ratings[c.id];
         const needsReason = val === 1 || val === 2;
         return (
@@ -1338,7 +1381,7 @@ function RoundSession({ supervisor, responses, onSubmit, onSwitch, goOverview })
               <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.border}` }}>
                 <p style={{ fontSize: 11.5, color: C.inkMuted, fontWeight: 600, marginBottom: 6 }}>وش السبب؟ (اختياري)</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {REASONS[c.id].map(r => {
+                  {reasonsMap[c.id].map(r => {
                     const active = reasonChoice[c.id] === r;
                     return (
                       <button
@@ -1409,14 +1452,16 @@ function RoundSession({ supervisor, responses, onSubmit, onSwitch, goOverview })
 function ManageTab({ supervisors, responses, onAdd, onRemove, onUpdate }) {
   const [name, setName] = useState('');
   const [department, setDepartment] = useState('');
+  const [type, setType] = useState('rooms');
   const [copiedId, setCopiedId] = useState(null);
   const [editingId, setEditingId] = useState(null);
 
   const add = () => {
     if (!name.trim() || !department.trim()) return;
-    onAdd({ id: uid(), name: name.trim(), department: department.trim() });
+    onAdd({ id: uid(), name: name.trim(), department: department.trim(), type });
     setName('');
     setDepartment('');
+    setType('rooms');
   };
 
   const [copiedType, setCopiedType] = useState(null);
@@ -1493,6 +1538,27 @@ function ManageTab({ supervisors, responses, onAdd, onRemove, onUpdate }) {
             value={department} onChange={e => setDepartment(e.target.value)} placeholder="القسم المسؤول عنه"
             className="rounded-xl px-3 py-2.5 text-sm" style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.ink }}
           />
+          <div>
+            <label style={{ fontSize: 11.5, color: C.inkMuted, fontWeight: 600 }}>نوع الاستبيان</label>
+            <div className="grid grid-cols-2 gap-2 mt-1.5">
+              <button
+                type="button"
+                onClick={() => setType('rooms')}
+                className="rounded-xl py-2 text-xs font-semibold"
+                style={{ background: type === 'rooms' ? C.primary : C.bg, color: type === 'rooms' ? '#fff' : C.inkMuted, border: `1px solid ${type === 'rooms' ? C.primary : C.border}` }}
+              >
+                غرف المرضى
+              </button>
+              <button
+                type="button"
+                onClick={() => setType('yards')}
+                className="rounded-xl py-2 text-xs font-semibold"
+                style={{ background: type === 'yards' ? C.primary : C.bg, color: type === 'yards' ? '#fff' : C.inkMuted, border: `1px solid ${type === 'yards' ? C.primary : C.border}` }}
+              >
+                الساحات الخارجية
+              </button>
+            </div>
+          </div>
           <button
             onClick={add}
             className="rounded-xl py-2.5 text-sm font-bold flex items-center justify-center gap-1.5 mt-1"
@@ -1522,7 +1588,16 @@ function ManageTab({ supervisors, responses, onAdd, onRemove, onUpdate }) {
                   <>
                     <div className="flex items-center gap-3">
                       <div className="flex-1 min-w-0">
-                        <p style={{ fontSize: 13, fontWeight: 700 }} className="truncate">{s.name}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p style={{ fontSize: 13, fontWeight: 700 }} className="truncate">{s.name}</p>
+                          <span style={{
+                            fontSize: 9.5, fontWeight: 700, padding: '1px 7px', borderRadius: 999, flexShrink: 0,
+                            color: s.type === 'yards' ? C.amber : C.primary,
+                            background: s.type === 'yards' ? C.amberSoft : C.primarySoft,
+                          }}>
+                            {s.type === 'yards' ? 'الساحات' : 'الغرف'}
+                          </span>
+                        </div>
                         <p style={{ fontSize: 11, color: C.inkMuted }} className="truncate">{s.department} · {count} استبيان</p>
                       </div>
                       <button onClick={() => setEditingId(s.id)} className="rounded-lg p-1.5" style={{ background: C.primarySoft }}>
@@ -1615,10 +1690,11 @@ function ManageTab({ supervisors, responses, onAdd, onRemove, onUpdate }) {
 function SupervisorEditor({ supervisor, onSave, onCancel }) {
   const [name, setName] = useState(supervisor.name);
   const [department, setDepartment] = useState(supervisor.department);
+  const [type, setType] = useState(supervisor.type === 'yards' ? 'yards' : 'rooms');
 
   const save = () => {
     if (!name.trim() || !department.trim()) return;
-    onSave({ name: name.trim(), department: department.trim() });
+    onSave({ name: name.trim(), department: department.trim(), type });
   };
 
   return (
@@ -1638,6 +1714,24 @@ function SupervisorEditor({ supervisor, onSave, onCancel }) {
         className="rounded-xl px-3 py-2.5 text-sm"
         style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.ink }}
       />
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => setType('rooms')}
+          className="rounded-xl py-2 text-xs font-semibold"
+          style={{ background: type === 'rooms' ? C.primary : C.bg, color: type === 'rooms' ? '#fff' : C.inkMuted, border: `1px solid ${type === 'rooms' ? C.primary : C.border}` }}
+        >
+          غرف المرضى
+        </button>
+        <button
+          type="button"
+          onClick={() => setType('yards')}
+          className="rounded-xl py-2 text-xs font-semibold"
+          style={{ background: type === 'yards' ? C.primary : C.bg, color: type === 'yards' ? '#fff' : C.inkMuted, border: `1px solid ${type === 'yards' ? C.primary : C.border}` }}
+        >
+          الساحات الخارجية
+        </button>
+      </div>
       <div className="flex gap-2">
         <button onClick={save} className="flex-1 rounded-xl py-2 text-xs font-bold" style={{ background: C.primary, color: '#fff' }}>
           حفظ
