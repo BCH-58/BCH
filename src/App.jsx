@@ -52,8 +52,19 @@ const YARD_CRITERIA = [
   { id: 'litter', label: 'خلو الساحة من المخلفات المتناثرة', short: 'خلو الساحة من المخلفات', icon: Droplets },
 ];
 
+// Third survey template — for supervisors of general indoor areas that
+// aren't patient rooms: corridors, offices, meeting halls.
+const OTHER_ROLES_CRITERIA = [
+  { id: 'corridors', label: 'نظافة الأرضيات والممرات الداخلية', short: 'الممرات الداخلية', icon: LayoutGrid },
+  { id: 'offices', label: 'نظافة المكاتب وقاعات الاجتماعات', short: 'المكاتب والقاعات', icon: Sparkles },
+  { id: 'restrooms', label: 'نظافة دورات المياه العامة', short: 'دورات المياه العامة', icon: Droplets },
+  { id: 'supplies', label: 'توفر أدوات النظافة والمعقمات', short: 'الأدوات والمعقمات', icon: ClipboardList },
+];
+
 function criteriaFor(type) {
-  return type === 'yards' ? YARD_CRITERIA : CRITERIA;
+  if (type === 'yards') return YARD_CRITERIA;
+  if (type === 'other') return OTHER_ROLES_CRITERIA;
+  return CRITERIA;
 }
 
 const SCALE = [
@@ -92,8 +103,17 @@ const YARD_REASONS = {
   litter: ['أوراق أو مخلفات متناثرة', 'أعقاب سجائر', 'مخلفات بناء أو صيانة', OTHER_REASON],
 };
 
+const OTHER_ROLES_REASONS = {
+  corridors: ['بقع واضحة', 'غبار متراكم', 'أثر انسكاب لم يُنظّف', OTHER_REASON],
+  offices: ['سلة مهملات ممتلئة', 'أسطح مكاتب متسخة', 'رائحة غير مناسبة', OTHER_REASON],
+  restrooms: ['رائحة كريهة', 'الأرضية مبللة أو متسخة', 'المرحاض غير نظيف', 'لا يوجد مناديل', OTHER_REASON],
+  supplies: ['لا يوجد صابون أو معقم', 'لا يوجد مناديل', 'حاويات المهملات ممتلئة', OTHER_REASON],
+};
+
 function reasonsFor(type) {
-  return type === 'yards' ? YARD_REASONS : REASONS;
+  if (type === 'yards') return YARD_REASONS;
+  if (type === 'other') return OTHER_ROLES_REASONS;
+  return REASONS;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -788,7 +808,7 @@ function MonthlyExportCard({ responses, supervisors }) {
     if (count === 0 || isExporting) return;
     setIsExporting(true);
     try {
-      await exportMonthlyReport({ responses, supervisors, criteria: CRITERIA, yardCriteria: YARD_CRITERIA, scale: SCALE, month });
+      await exportMonthlyReport({ responses, supervisors, criteria: CRITERIA, yardCriteria: YARD_CRITERIA, otherCriteria: OTHER_ROLES_CRITERIA, scale: SCALE, month });
       setJustExported(true);
       setTimeout(() => setJustExported(false), 2000);
     } finally {
@@ -1247,11 +1267,11 @@ function RoundSession({ supervisor, responses, onSubmit, onSwitch, goOverview })
   const [clientIp, setClientIp] = useState(null);
   const [device] = useState(getDeviceLabel);
 
-  const isYard = supervisor.type === 'yards';
+  const isYard = supervisor.type === 'yards' || supervisor.type === 'other';
   const criteria = criteriaFor(supervisor.type);
   const reasonsMap = reasonsFor(supervisor.type);
   const roomLabel = isYard ? 'الموقع' : 'رقم الغرفة';
-  const roomPlaceholder = isYard ? 'مثال: ساحة المدخل الرئيسي' : 'مثال: 214';
+  const roomPlaceholder = supervisor.type === 'yards' ? 'مثال: ساحة المدخل الرئيسي' : supervisor.type === 'other' ? 'مثال: الممر الرئيسي - الطابق الثاني' : 'مثال: 214';
   const nameLabel = isYard ? 'الاسم' : 'اسم المريض';
   const namePlaceholder = isYard ? 'اسمك' : 'اسم المريض';
 
@@ -1538,7 +1558,7 @@ function ManageTab({ supervisors, responses, onAdd, onRemove, onUpdate }) {
           />
           <div>
             <label style={{ fontSize: 11.5, color: C.inkMuted, fontWeight: 600 }}>نوع الاستبيان</label>
-            <div className="grid grid-cols-2 gap-2 mt-1.5">
+            <div className="grid grid-cols-3 gap-2 mt-1.5">
               <button
                 type="button"
                 onClick={() => setType('rooms')}
@@ -1554,6 +1574,14 @@ function ManageTab({ supervisors, responses, onAdd, onRemove, onUpdate }) {
                 style={{ background: type === 'yards' ? C.primary : C.bg, color: type === 'yards' ? '#fff' : C.inkMuted, border: `1px solid ${type === 'yards' ? C.primary : C.border}` }}
               >
                 الساحات الخارجية
+              </button>
+              <button
+                type="button"
+                onClick={() => setType('other')}
+                className="rounded-xl py-2 text-xs font-semibold"
+                style={{ background: type === 'other' ? C.primary : C.bg, color: type === 'other' ? '#fff' : C.inkMuted, border: `1px solid ${type === 'other' ? C.primary : C.border}` }}
+              >
+                أدوار أخرى
               </button>
             </div>
           </div>
@@ -1590,10 +1618,10 @@ function ManageTab({ supervisors, responses, onAdd, onRemove, onUpdate }) {
                           <p style={{ fontSize: 13, fontWeight: 700 }} className="truncate">{s.name}</p>
                           <span style={{
                             fontSize: 9.5, fontWeight: 700, padding: '1px 7px', borderRadius: 999, flexShrink: 0,
-                            color: s.type === 'yards' ? C.amber : C.primary,
-                            background: s.type === 'yards' ? C.amberSoft : C.primarySoft,
+                            color: s.type === 'yards' ? C.amber : s.type === 'other' ? C.green : C.primary,
+                            background: s.type === 'yards' ? C.amberSoft : s.type === 'other' ? '#E3F1EC' : C.primarySoft,
                           }}>
-                            {s.type === 'yards' ? 'الساحات' : 'الغرف'}
+                            {s.type === 'yards' ? 'الساحات' : s.type === 'other' ? 'أدوار أخرى' : 'الغرف'}
                           </span>
                         </div>
                         <p style={{ fontSize: 11, color: C.inkMuted }} className="truncate">{s.department} · {count} استبيان</p>
@@ -1688,7 +1716,7 @@ function ManageTab({ supervisors, responses, onAdd, onRemove, onUpdate }) {
 function SupervisorEditor({ supervisor, onSave, onCancel }) {
   const [name, setName] = useState(supervisor.name);
   const [department, setDepartment] = useState(supervisor.department);
-  const [type, setType] = useState(supervisor.type === 'yards' ? 'yards' : 'rooms');
+  const [type, setType] = useState(supervisor.type === 'yards' || supervisor.type === 'other' ? supervisor.type : 'rooms');
 
   const save = () => {
     if (!name.trim() || !department.trim()) return;
@@ -1712,7 +1740,7 @@ function SupervisorEditor({ supervisor, onSave, onCancel }) {
         className="rounded-xl px-3 py-2.5 text-sm"
         style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.ink }}
       />
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <button
           type="button"
           onClick={() => setType('rooms')}
@@ -1728,6 +1756,14 @@ function SupervisorEditor({ supervisor, onSave, onCancel }) {
           style={{ background: type === 'yards' ? C.primary : C.bg, color: type === 'yards' ? '#fff' : C.inkMuted, border: `1px solid ${type === 'yards' ? C.primary : C.border}` }}
         >
           الساحات الخارجية
+        </button>
+        <button
+          type="button"
+          onClick={() => setType('other')}
+          className="rounded-xl py-2 text-xs font-semibold"
+          style={{ background: type === 'other' ? C.primary : C.bg, color: type === 'other' ? '#fff' : C.inkMuted, border: `1px solid ${type === 'other' ? C.primary : C.border}` }}
+        >
+          أدوار أخرى
         </button>
       </div>
       <div className="flex gap-2">
