@@ -58,7 +58,7 @@ const OTHER_ROLES_CRITERIA = [
   { id: 'corridors', label: 'نظافة الأرضيات والممرات الداخلية', short: 'الممرات الداخلية', icon: LayoutGrid },
   { id: 'offices', label: 'نظافة المكاتب وقاعات الاجتماعات', short: 'المكاتب والقاعات', icon: Sparkles },
   { id: 'restrooms', label: 'نظافة دورات المياه العامة', short: 'دورات المياه العامة', icon: Droplets },
-  { id: 'supplies', label: 'توفر أدوات النظافة والمعقمات', short: 'الأدوات والمعقمات', icon: ClipboardList },
+  { id: 'supplies', label: 'توفر أدوات النظافة والمناديل', short: 'الأدوات والمناديل', icon: ClipboardList },
 ];
 
 function criteriaFor(type) {
