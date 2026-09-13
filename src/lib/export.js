@@ -19,20 +19,14 @@ function pctFromValues(vals) {
   return sum / vals.length;
 }
 
-// Score of one response using only the criteria that belong to it (so a
-// yard response is scored on its own 5 items, not the room ones).
-function scoreOf(r, criteriaForType) {
-  const criteria = criteriaForType(r.surveyType);
-  const vals = criteria.map((c) => r.ratings[c.id]).filter((v) => v !== undefined);
-  return Math.round(pctFromValues(vals));
-}
-
 function colorForPct(pct) {
   if (pct >= 85) return BRAND;
   if (pct >= 70) return GREEN;
   if (pct >= 55) return AMBER;
   return RED;
 }
+
+const TYPE_LABEL = { yards: 'الساحات', other: 'أدوار أخرى', rooms: 'الغرف' };
 
 // Draws a simple horizontal bar chart (per-supervisor score) on an offscreen
 // canvas and returns it as PNG bytes — no external chart library or network
@@ -103,8 +97,8 @@ function styleDataRow(row) {
   });
 }
 
-// Adds a "بيانات" sheet for one survey type (rooms or yards) with its own
-// criteria columns. Returns nothing — mutates the workbook.
+// Adds a "بيانات" sheet for one survey type (rooms, yards, or other) with
+// its own criteria columns.
 function addDataSheet(wb, { sheetName, responses, supervisors, criteria, scale, locationLabel, nameLabel }) {
   const sheet = wb.addWorksheet(sheetName, { views: [{ rightToLeft: true }] });
   const headers = [
@@ -149,15 +143,17 @@ function addDataSheet(wb, { sheetName, responses, supervisors, criteria, scale, 
   sheet.autoFilter = { from: 'A1', to: `${lastColLetter}1` };
 }
 
-export async function exportMonthlyReport({ responses, supervisors, criteria, yardCriteria, scale, month }) {
+export async function exportMonthlyReport({ responses, supervisors, criteria, yardCriteria, otherCriteria, scale, month }) {
   const monthResponses = responses
     .filter((r) => r.date.startsWith(month))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  const criteriaForType = (type) => (type === 'yards' ? yardCriteria : criteria);
-
-  const roomResponses = monthResponses.filter((r) => (r.surveyType || 'rooms') !== 'yards');
-  const yardResponses = monthResponses.filter((r) => r.surveyType === 'yards');
+  const byType = {
+    rooms: monthResponses.filter((r) => (r.surveyType || 'rooms') === 'rooms'),
+    yards: monthResponses.filter((r) => r.surveyType === 'yards'),
+    other: monthResponses.filter((r) => r.surveyType === 'other'),
+  };
+  const criteriaByType = { rooms: criteria, yards: yardCriteria, other: otherCriteria };
 
   const wb = new ExcelJS.Workbook();
   wb.creator = 'لوحة متابعة النظافة';
@@ -165,8 +161,8 @@ export async function exportMonthlyReport({ responses, supervisors, criteria, ya
 
   // ------------------------- Summary sheet -------------------------
   // Each supervisor's overall % uses whichever criteria set belongs to
-  // their own responses, so room and yard supervisors are both scored
-  // correctly out of their own 5 items.
+  // their own responses, so every type is scored correctly out of its
+  // own items regardless of how many questions it has.
   const supStats = supervisors
     .map((s) => {
       const rs = monthResponses.filter((r) => r.supervisorId === s.id);
@@ -177,17 +173,6 @@ export async function exportMonthlyReport({ responses, supervisors, criteria, ya
       return { name: s.name, department: s.department, type: s.type, count: rs.length, pct };
     })
     .sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1));
-
-  const critStats = criteria.map((c) => {
-    const vals = roomResponses.map((r) => r.ratings[c.id]).filter((v) => v !== undefined);
-    const pct = vals.length ? Math.round(pctFromValues(vals)) : null;
-    return { label: c.label, pct };
-  });
-  const yardCritStats = yardCriteria.map((c) => {
-    const vals = yardResponses.map((r) => r.ratings[c.id]).filter((v) => v !== undefined);
-    const pct = vals.length ? Math.round(pctFromValues(vals)) : null;
-    return { label: c.label, pct };
-  });
 
   const summarySheet = wb.addWorksheet('الملخص', { views: [{ rightToLeft: true }] });
   summarySheet.mergeCells('A1:D1');
@@ -200,28 +185,29 @@ export async function exportMonthlyReport({ responses, supervisors, criteria, ya
 
   styleHeaderRow(summarySheet.addRow(['المشرف', 'القسم', 'النوع', 'عدد الاستبيانات', 'النسبة العامة']));
   supStats.forEach((s) => {
-    const row = summarySheet.addRow([s.name, s.department, s.type === 'yards' ? 'الساحات' : 'الغرف', s.count, s.pct !== null ? `${s.pct}%` : '—']);
+    const row = summarySheet.addRow([s.name, s.department, TYPE_LABEL[s.type] || TYPE_LABEL.rooms, s.count, s.pct !== null ? `${s.pct}%` : '—']);
     styleDataRow(row);
     if (s.pct !== null) {
       row.getCell(5).font = { bold: true, color: { argb: colorForPct(s.pct) } };
     }
   });
 
-  summarySheet.addRow([]);
-  styleHeaderRow(summarySheet.addRow(['بند استبيان الغرف', 'النسبة']));
-  critStats.forEach((c) => {
-    const row = summarySheet.addRow([c.label, c.pct !== null ? `${c.pct}%` : '—']);
-    styleDataRow(row);
-  });
-
-  if (yardResponses.length > 0) {
+  ['rooms', 'yards', 'other'].forEach((type) => {
+    const typeResponses = byType[type];
+    if (typeResponses.length === 0 && type !== 'rooms') return; // always show room breakdown; others only if used
+    const typeCriteria = criteriaByType[type];
+    const critStats = typeCriteria.map((c) => {
+      const vals = typeResponses.map((r) => r.ratings[c.id]).filter((v) => v !== undefined);
+      const pct = vals.length ? Math.round(pctFromValues(vals)) : null;
+      return { label: c.label, pct };
+    });
     summarySheet.addRow([]);
-    styleHeaderRow(summarySheet.addRow(['بند استبيان الساحات', 'النسبة']));
-    yardCritStats.forEach((c) => {
+    styleHeaderRow(summarySheet.addRow([`بند استبيان ${TYPE_LABEL[type]}`, 'النسبة']));
+    critStats.forEach((c) => {
       const row = summarySheet.addRow([c.label, c.pct !== null ? `${c.pct}%` : '—']);
       styleDataRow(row);
     });
-  }
+  });
 
   summarySheet.columns = [{ width: 22 }, { width: 18 }, { width: 12 }, { width: 16 }, { width: 14 }];
   summarySheet.views = [{ rightToLeft: true }];
@@ -240,7 +226,7 @@ export async function exportMonthlyReport({ responses, supervisors, criteria, ya
   // -------------------------- Data sheets ----------------------------
   addDataSheet(wb, {
     sheetName: 'بيانات الغرف',
-    responses: roomResponses,
+    responses: byType.rooms,
     supervisors,
     criteria,
     scale,
@@ -248,12 +234,24 @@ export async function exportMonthlyReport({ responses, supervisors, criteria, ya
     nameLabel: 'اسم المريض',
   });
 
-  if (yardResponses.length > 0) {
+  if (byType.yards.length > 0) {
     addDataSheet(wb, {
       sheetName: 'بيانات الساحات',
-      responses: yardResponses,
+      responses: byType.yards,
       supervisors,
       criteria: yardCriteria,
+      scale,
+      locationLabel: 'الموقع',
+      nameLabel: 'الاسم',
+    });
+  }
+
+  if (byType.other.length > 0) {
+    addDataSheet(wb, {
+      sheetName: 'بيانات أخرى',
+      responses: byType.other,
+      supervisors,
+      criteria: otherCriteria,
       scale,
       locationLabel: 'الموقع',
       nameLabel: 'الاسم',
