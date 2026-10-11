@@ -1263,7 +1263,7 @@ function RoundSession({ supervisor, responses, onSubmit, onSwitch, goOverview })
   const [reasonChoice, setReasonChoice] = useState({});
   const [reasonOther, setReasonOther] = useState({});
   const [comment, setComment] = useState('');
-  const [flash, setFlash] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [clientIp, setClientIp] = useState(null);
   const [device] = useState(getDeviceLabel);
 
@@ -1320,9 +1320,30 @@ function RoundSession({ supervisor, responses, onSubmit, onSwitch, goOverview })
     setComment('');
     setPatientName('');
     setRoom('');
-    setFlash(true);
-    setTimeout(() => setFlash(false), 1200);
+    setSubmitted(true);
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  if (submitted) {
+    return (
+      <div className="flex flex-col items-center text-center gap-4 py-10 px-4 rounded-2xl" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
+        <div className="rounded-full p-4" style={{ background: C.primarySoft }}>
+          <CheckCircle2 size={64} color={C.primary} />
+        </div>
+        <p style={{ fontFamily: 'Cairo', fontWeight: 800, fontSize: 22, color: C.primaryDeep }}>تم إرسال تقييمك بنجاح ✓</p>
+        <p style={{ fontSize: 14, color: C.inkMuted, lineHeight: 1.8 }}>
+          شكراً لك على وقتك ومشاركتك.<br />رأيك يساعدنا على تحسين مستوى النظافة.
+        </p>
+        <button
+          onClick={() => setSubmitted(false)}
+          className="rounded-xl px-5 py-3 text-sm font-bold mt-2"
+          style={{ background: C.primary, color: '#fff' }}
+        >
+          {isYard ? 'تقييم موقع آخر' : 'تقييم غرفة أخرى'}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4 pb-4">
@@ -1345,13 +1366,6 @@ function RoundSession({ supervisor, responses, onSubmit, onSwitch, goOverview })
           </button>
         )}
       </div>
-
-      {flash && (
-        <div className="rounded-xl px-3 py-2 flex items-center gap-2" style={{ background: C.primarySoft }}>
-          <CheckCircle2 size={15} color={C.primary} />
-          <span style={{ fontSize: 12.5, color: C.primary, fontWeight: 600 }}>تم الحفظ — جاهز {isYard ? 'للموقع التالي' : 'للغرفة التالية'}</span>
-        </div>
-      )}
 
       <div className="rounded-2xl p-4 flex flex-col gap-3" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
         <div>
