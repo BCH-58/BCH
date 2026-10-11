@@ -1326,7 +1326,7 @@ function RoundSession({ supervisor, responses, onSubmit, onSwitch, goOverview })
 
   if (submitted) {
     return (
-      <div className="flex flex-col items-center text-center gap-4 py-10 px-4 rounded-2xl" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
+      <div className="flex flex-col items-center text-center gap-4 py-12 px-4 rounded-2xl" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
         <div className="rounded-full p-4" style={{ background: C.primarySoft }}>
           <CheckCircle2 size={64} color={C.primary} />
         </div>
@@ -1334,13 +1334,6 @@ function RoundSession({ supervisor, responses, onSubmit, onSwitch, goOverview })
         <p style={{ fontSize: 14, color: C.inkMuted, lineHeight: 1.8 }}>
           شكراً لك على وقتك ومشاركتك.<br />رأيك يساعدنا على تحسين مستوى النظافة.
         </p>
-        <button
-          onClick={() => setSubmitted(false)}
-          className="rounded-xl px-5 py-3 text-sm font-bold mt-2"
-          style={{ background: C.primary, color: '#fff' }}
-        >
-          {isYard ? 'تقييم موقع آخر' : 'تقييم غرفة أخرى'}
-        </button>
       </div>
     );
   }
