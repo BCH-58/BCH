@@ -549,6 +549,9 @@ export default function App() {
             supervisors={supervisors}
             responses={monthResponses}
             onBack={() => setSelectedSupId(null)}
+            onDeleteOne={async (responseId) => {
+              await persistResponses(responses.filter(r => r.id !== responseId));
+            }}
             onClearResponses={async (supervisorId) => {
               const idsToRemove = new Set(
                 monthResponses.filter(r => r.supervisorId === supervisorId).map(r => r.id)
@@ -930,7 +933,7 @@ function SupervisorsTab({ supervisorStats, onSelect, goManage }) {
   );
 }
 
-function SupervisorDetail({ supId, supervisors, responses, onBack, onClearResponses }) {
+function SupervisorDetail({ supId, supervisors, responses, onBack, onClearResponses, onDeleteOne }) {
   const sup = supervisors.find(s => s.id === supId);
   // Newest first: reverse (submissions are appended in order, so this puts
   // the latest-submitted one first), then a stable sort by date descending
@@ -938,6 +941,7 @@ function SupervisorDetail({ supId, supervisors, responses, onBack, onClearRespon
   const rs = [...responses].filter(r => r.supervisorId === supId).reverse().sort((a, b) => b.date.localeCompare(a.date));
   const [expandedId, setExpandedId] = useState(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   const criteria = criteriaFor(sup && sup.type);
   const criteriaAverages = criteria.map(c => {
@@ -1045,9 +1049,10 @@ function SupervisorDetail({ supId, supervisors, responses, onBack, onClearRespon
             const rIsYard = r.surveyType === 'yards';
             return (
               <div key={r.id} className="rounded-xl overflow-hidden" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
+                <div className="flex items-center">
                 <button
                   onClick={() => setExpandedId(isOpen ? null : r.id)}
-                  className="w-full px-3 py-2.5 flex items-center gap-3 text-right"
+                  className="flex-1 min-w-0 px-3 py-2.5 flex items-center gap-3 text-right"
                 >
                   <CalendarDays size={14} color={C.inkMuted} />
                   <div className="flex-1 min-w-0">
@@ -1059,6 +1064,33 @@ function SupervisorDetail({ supId, supervisors, responses, onBack, onClearRespon
                   <span style={{ fontFamily: 'Cairo', fontWeight: 800, fontSize: 13, color: scoreColor(pct) }}>{Math.round(pct)}%</span>
                   <ChevronRight size={15} color={C.inkMuted} style={{ transform: isOpen ? 'rotate(-90deg)' : 'rotate(180deg)', transition: 'transform 0.15s' }} />
                 </button>
+                {confirmDeleteId === r.id ? (
+                  <div className="flex items-center gap-1 pl-2">
+                    <button
+                      onClick={async () => { await onDeleteOne(r.id); setConfirmDeleteId(null); }}
+                      className="text-xs font-bold px-2 py-1.5 rounded-lg"
+                      style={{ background: C.red, color: '#fff' }}
+                    >
+                      تأكيد الحذف
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="text-xs font-semibold px-2 py-1.5 rounded-lg"
+                      style={{ background: C.bg, color: C.inkMuted, border: `1px solid ${C.border}` }}
+                    >
+                      إلغاء
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDeleteId(r.id)}
+                    className="p-2.5"
+                    aria-label="حذف هذا الاستبيان"
+                  >
+                    <Trash2 size={15} color={C.red} />
+                  </button>
+                )}
+                </div>
 
                 {isOpen && (
                   <div className="px-3 pb-3 flex flex-col gap-1.5" style={{ borderTop: `1px solid ${C.border}` }}>
